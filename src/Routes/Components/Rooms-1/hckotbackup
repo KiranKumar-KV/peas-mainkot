@@ -1,0 +1,162 @@
+import React, { Component } from "react";
+import KOTContHeader from "./KOTContHeader";
+import KOTContFooter from "./KOTContFooter";
+import KOTContBody from "./KOTContBody";
+import axios from 'axios';
+const API_URL = process.env.REACT_APP_API_URL;
+export default class HCKOTContainer extends Component {
+  constructor(props){
+    super(props);
+    this.state = {
+      slipCount : 1,
+      addBtnState:true,
+      items:[],
+      total_price:0,
+      printItems:[],
+      bill_id:'',
+      bill_date_time:'',
+      kot_id_list:[],
+      totalamount:0,
+      hoteltoken: "",
+      order_id :"",
+      kotcount: 0
+      
+    }
+  }
+ 
+ handleRemoveItem(itemName,price,q_id,q_type,itemQty)
+  {
+    this.props.handleRemoveItem(itemName,price,q_id,q_type,itemQty);
+  }
+  handleClear(itemName,order_id)
+  {
+    
+    this.props.handleClear(itemName);
+  }
+
+ handleReduceItem(itemName,price,q_id,q_type,itemQty)
+ {
+  this.props.handleReduceItem(itemName,price,q_id,q_type,itemQty);
+ }
+ async componentDidMount() {
+   await this.get()
+   await this.getActiveKotList()
+ 
+ }
+ async get()
+ {
+  let roomid = this.props.roomid
+  // let roomauthtoken = await axios.get(API_URL+'/hms/bDetails/get_auth_token/'+roomid);
+  let roomauthtoken =   await axios.get(API_URL+'/hms/bDetails/get-guest-order-id-from-room/'+roomid);
+ 
+  if(roomauthtoken.data.length>0) {
+    this.setState({
+      hoteltoken: roomauthtoken.data[0].hotel_auth_token
+    })
+  }
+  
+ if(this.state.hoteltoken!=="") {
+  let resp= await axios.get(API_URL+'/hms/kot/get-guest-order-list/'+this.state.hoteltoken);
+  if(resp.data.length>0) {
+    this.setState({
+      order_id: resp.data[0].kot_data.order_id
+    })
+  }
+
+let newitems=[];
+ let kotid=[]
+ let price=0;
+  if(resp.data[0])
+  {
+    resp.data[0].kot_data.kot_list.map(items=>{
+     kotid.push(items.kot_id)
+      items.items.map(item=>{
+        newitems.push(item)
+        price=price+parseFloat(parseInt(item.quantity)*parseInt(item.price))
+      })
+    })
+
+  let items=resp.data[0].kot_data.kot_list;
+    this.setState({
+      items:items,
+     // bill_id:resp.data[0].kot_data.bill_id,
+     
+      printItems:newitems,
+      kot_id_list:kotid,
+      totalamount:price
+    })
+  }
+ }
+
+ 
+ }
+
+ getActiveKotList = async() => {
+   if(this.state.order_id!=="") {
+    let resp1= await axios.get(API_URL+'/hms/kot/get-active-kot-list/'+this.state.order_id);
+    await this.setState({
+      kotcount: resp1.data[0].kot_count
+    })
+  }
+}
+ async getPrice()
+{
+  await this.get();
+  let total_price=0;
+  await this.state.items.map((item)=>{
+    item.items.map(l=>{
+      if(l.item_status==='Cancelled')
+      {
+        total_price=total_price+(0*l.quantity) 
+      }
+      else
+      {
+        total_price=total_price+(l.price*l.quantity)
+      }
+    })
+  })
+    await this.setState({
+      total_price:total_price
+    })
+}
+async componentWillReceiveProps()
+{
+  this.getPrice();
+}
+componentWillMount()
+{
+ this.getPrice();
+ 
+}
+
+async handleCancelOrder(data)
+{
+  try{
+    let respo=await axios.put(API_URL+'/hms/kot/canceOrder/'+data.item_id,{data});
+    this.get();
+    this.getPrice();
+  }
+  catch(error)
+  {
+    alert("getting");
+  }
+}
+
+
+
+
+
+
+
+  render() {
+  
+ 
+    return (
+      <div className="kotContainer">
+        <KOTContHeader/>
+        <KOTContBody handleCancelOrder={this.handleCancelOrder.bind(this)} items={this.state.items} itemName={this.props.itemName} price={this.props.price} id={this.props.id} q_id={this.props.q_id} q_type={this.props.q_type} tax={this.props.tax} room_no={this.props.room_no}   handleRemoveItem={this.handleRemoveItem.bind(this)} handleReduceItem={this.handleReduceItem.bind(this)}  />
+        <KOTContFooter kotcounts={this.state.kotcount} order_id={this.state.order_id} tax={this.props.tax} room_no={this.props.room_no} authtoken={this.state.hoteltoken} room_id={this.props.roomid} bokingid={this.props.bookings_id} itemName={this.props.itemName} price={this.props.price} q_id={this.props.q_id} id={this.props.id} itemQty={this.props.itemQty} auth_token={this.state.hoteltoken} handleClear={this.handleClear.bind(this)} />
+      </div>
+    );
+  }
+}
